@@ -96,7 +96,7 @@ static inline bool is_mpls_entry_bos(struct mpls_hdr * hdr)
  * @bos true/false if label is the bottom of the stack
  */
 static inline struct mpls_hdr mpls_encode(unsigned int label, unsigned int ttl,
-													 unsigned int tc, int bos)
+													 unsigned int tc, bool bos)
 {
 	struct mpls_hdr result;
 	result.entry =

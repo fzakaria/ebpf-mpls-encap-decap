@@ -1,6 +1,9 @@
 #ifndef BPF_HELPERS_H
 #define BPF_HELPERS_H
 
+/* BPF_FUNC_skb_store_bytes flags. */
+#define BPF_F_RECOMPUTE_CSUM		(1ULL << 0)
+
 /* helper functions called from eBPF programs written in C */
 static void *(*bpf_map_lookup_elem)(void *map, void *key) =
 	(void *) BPF_FUNC_map_lookup_elem;

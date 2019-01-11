@@ -31,6 +31,11 @@
 #include "helpers.h"
 #include "mpls.h"
 
+/*
+ * For learning purposes let's just use a fixed MPLS label
+ */
+#define MPLS_STATIC_LABEL 69
+
 #define BPF_ADJ_ROOM_NET 0
 
 /*
@@ -48,13 +53,14 @@ static_assert(sizeof(struct ethhdr) == ETH_HLEN,
               "ethernet header size does not match.");
 
 /*
- * Entry point for the decapsulation eBPF
+ * Entry point for the encapsulation & decapsulation eBPF
  * __sk_buff is a "shadow" struct of the internal sk_buff.
  * You can read more how sk_buff works
  * http://vger.kernel.org/~davem/skb_data.html
  * @skb the socket buffer struct
  */
 int mpls_decap(struct __sk_buff *skb);
+int mpls_encap(struct __sk_buff *skb);
 
 SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   /*
@@ -125,12 +131,73 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   }
 
   /*
-   * We are going to shrink the skb which will overwrite the
+   * This is the amount of padding we need to remove to be just left
+   * with eth * iphdr.
    */
-  struct ethhdr eth_copy;
-  int ret = bpf_skb_load_bytes(skb, 0, &eth_copy, sizeof(struct ethhdr));
+  int padlen = sizeof(struct mpls_hdr);
+
+  /*
+   * Grow or shrink the room for data in the packet associated to
+   * skb by length and according to the selected mode.
+   * BPF_ADJ_ROOM_NET: Adjust room at the network layer
+   *  (room space is added or removed below the layer 3 header).
+   */
+  int ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
-    bpf_printk("error calling skb load bytes.\n");
+    bpf_printk("error calling skb adjust room.\n");
+    return TC_ACT_SHOT;
+  }
+
+  return TC_ACT_OK;
+}
+
+SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
+  /*
+   * the redundant casts are needed according to the documentation.
+   * possibly for the BPF verifier.
+   * https://www.spinics.net/lists/xdp-newbies/msg00181.html
+   */
+  void *data_end = (void *)(long)skb->data_end;
+  void *data = (void *)(long)skb->data;
+
+  // The packet starts with the ethernet header, so let's get that going:
+  struct ethhdr *eth = (struct ethhdr *)(data);
+
+  /*
+   * Now, we can't just go "eth->h_proto", that's illegal.  We have to
+   * explicitly test that such an access is in range and doesn't go
+   * beyond "data_end" -- again for the verifier.
+   * The eBPF verifier will see that "eth" holds a packet pointer,
+   * and also that you have made sure that from "eth" to "eth + 1"
+   * is inside the valid access range for the packet.
+   */
+  if ((void *)(eth + 1) > data_end) {
+    bpf_printk("socket buffer struct was malformed.\n");
+    return TC_ACT_SHOT;
+  }
+
+  /*
+   * We only care about IP packet frames. Don't do anything to other ethernet
+   * packets like ARP.
+   * hton -> host to network order. Network order is always big-endian.
+   * pedantic: the protocol is also directly accessible from __sk_buf
+   */
+  if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+    bpf_printk("ethernet is not wrapping IP packet.\n");
+    return TC_ACT_SHOT;
+  }
+
+  struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
+
+  if ((void *)(iph + 1) > data_end) {
+    bpf_printk("socket buffer struct was malformed.\n");
+    return TC_ACT_SHOT;
+  }
+
+  // multiply ip header by 4 (bytes) to get the number of bytes of the header.
+  int iph_len = iph->ihl << 2;
+  if (iph_len > MAX_IP_HDR_LEN) {
+    bpf_printk("ip header is too long.\n");
     return TC_ACT_SHOT;
   }
 
@@ -146,11 +213,17 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * BPF_ADJ_ROOM_NET: Adjust room at the network layer
    *  (room space is added or removed below the layer 3 header).
    */
-  ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
+  int ret = bpf_skb_adjust_room(skb, padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
     bpf_printk("error calling skb adjust room.\n");
     return TC_ACT_SHOT;
   }
+
+  // construct our deterministic mpls header
+  struct mpls_hdr mpls = mpls_encode(MPLS_STATIC_LABEL, 123, 0, true);
+  unsigned long offset = sizeof(struct ethhdr) + (unsigned long)iph_len;
+  ret = bpf_skb_store_bytes(skb, offset, &mpls, sizeof(struct mpls_hdr),
+                            BPF_F_RECOMPUTE_CSUM);
 
   return TC_ACT_OK;
 }
