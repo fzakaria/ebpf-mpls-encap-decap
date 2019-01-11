@@ -136,11 +136,19 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * with eth * iphdr.
    */
   int padlen = sizeof(struct mpls_hdr);
+
+  /*
+   * Grow or shrink the room for data in the packet associated to
+   * skb by length and according to the selected mode.
+   * BPF_ADJ_ROOM_NET: Adjust room at the network layer
+   *  (room space is added or removed below the layer 3 header).
+   */
   ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
     bpf_printk("error calling skb adjust room.\n");
     return BPF_DROP;
   }
+
   return 0;
 }
 
