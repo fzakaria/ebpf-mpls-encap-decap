@@ -24,7 +24,10 @@ RUN yum-config-manager --enable ol7_software_collections
 
 # Install development tools
 RUN yum -y install llvm-toolset-7
+# Need the 32bit glibc for static assert
+RUN yum -y install glibc-devel.i686
 RUN yum -y clean all
+
 
 ENV CLANG /opt/rh/llvm-toolset-7/root/usr/bin/clang
 ENV CLANG_FORMAT /opt/rh/llvm-toolset-7/root/usr/bin/clang-format

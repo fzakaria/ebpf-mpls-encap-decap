@@ -21,9 +21,11 @@
  * @author Farid Zakaria <farid.m.zakaria\@gmail.com>
  *******************************************************************************************/
 
+#include <assert.h>
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
+#include <linux/mpls.h>
 #include "bpf_endian.h"
 #include "bpf_helpers.h"
 #include "helpers.h"
@@ -31,8 +33,14 @@
 #define BPF_DROP 2
 #define BPF_OK 0
 
+static_assert(sizeof(struct ethhdr) == ETH_HLEN,
+              "ethernet header size does not match.");
+
 /*
  * Entry point for the encapsulation eBPF
+ * __sk_buff is a "shadow" struct of the internal sk_buff.
+ * You can read more how sk_buff works
+ * http://vger.kernel.org/~davem/skb_data.html
  * @skb the socket buffer struct
  */
 int mpls_encap(struct __sk_buff *skb);
@@ -69,10 +77,12 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+    bpf_printk("ethernet is not wrapping IP packet.\n");
     return BPF_OK;
   }
 
-  struct iphdr *iph = (struct iphdr *)(eth + 1);
+  // Why does
+  struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
     bpf_printk("socket buffer struct was malformed.\n");
