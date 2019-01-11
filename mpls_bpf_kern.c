@@ -242,11 +242,12 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
   // construct our deterministic mpls header
   struct mpls_hdr mpls = mpls_encode(MPLS_STATIC_LABEL, 123, 0, true);
 
+  bpf_printk("[encap] about to store bytes of MPLS label: %#x\n",
+             MPLS_STATIC_LABEL);
+
   unsigned long offset = sizeof(struct ethhdr) + (unsigned long)iph_len;
   ret = bpf_skb_store_bytes(skb, (int)offset, &mpls, sizeof(struct mpls_hdr),
                             BPF_F_RECOMPUTE_CSUM);
-
-  bpf_printk("[encap] decoded MPLS label: %#x\n", MPLS_STATIC_LABEL);
 
   return TC_ACT_OK;
 }
