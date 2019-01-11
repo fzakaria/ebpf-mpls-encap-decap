@@ -81,6 +81,8 @@ int mpls_decap(struct __sk_buff *skb);
 int mpls_encap(struct __sk_buff *skb);
 
 SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
+  bpf_printk("[decap] starting mpls decap.\n");
+
   /*
    * the redundant casts are needed according to the documentation.
    * possibly for the BPF verifier.
@@ -171,6 +173,8 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
 }
 
 SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
+  bpf_printk("[encap] starting mpls encap.\n");
+
   /*
    * the redundant casts are needed according to the documentation.
    * possibly for the BPF verifier.
@@ -239,11 +243,11 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     return TC_ACT_SHOT;
   }
 
-  // construct our deterministic mpls header
-  struct mpls_hdr mpls = mpls_encode(MPLS_STATIC_LABEL, 123, 0, true);
-
   bpf_printk("[encap] about to store bytes of MPLS label: %#x\n",
              MPLS_STATIC_LABEL);
+
+  // construct our deterministic mpls header
+  struct mpls_hdr mpls = mpls_encode(MPLS_STATIC_LABEL, 123, 0, true);
 
   unsigned long offset = sizeof(struct ethhdr) + (unsigned long)iph_len;
   ret = bpf_skb_store_bytes(skb, (int)offset, &mpls, sizeof(struct mpls_hdr),
