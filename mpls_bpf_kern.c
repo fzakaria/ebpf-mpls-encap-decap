@@ -169,6 +169,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
     return TC_ACT_SHOT;
   }
 
+  bpf_printk("[decap] finished mpls decap.\n");
   return TC_ACT_OK;
 }
 
@@ -208,7 +209,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("[encap] ethernet is not wrapping IP packet: 0x%x",
+    bpf_printk("[encap] ethernet is not wrapping IP packet: 0x%x\n",
                bpf_ntohs(eth->h_proto));
     return TC_ACT_OK;
   }
@@ -259,6 +260,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
   ret = bpf_skb_store_bytes(skb, (int)offset, &mpls, sizeof(struct mpls_hdr),
                             BPF_F_RECOMPUTE_CSUM);
 
+  bpf_printk("[encap] finished mpls encap.\n");
   return TC_ACT_OK;
 }
 
