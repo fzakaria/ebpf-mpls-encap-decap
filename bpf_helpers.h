@@ -44,6 +44,9 @@ static int (*bpf_probe_write_user)(void *dst, void *src, int size) =
 	(void *) BPF_FUNC_probe_write_user;
 static int (*bpf_current_task_under_cgroup)(void *map, int index) =
 	(void *) BPF_FUNC_current_task_under_cgroup;
+static int (*bpf_skb_adjust_room)(void *ctx, __s32 len_diff, __u32 mode,
+				  __u64 flags) =
+	(void *) BPF_FUNC_skb_adjust_room;
 static int (*bpf_skb_get_tunnel_key)(void *ctx, void *key, int size, int flags) =
 	(void *) BPF_FUNC_skb_get_tunnel_key;
 static int (*bpf_skb_set_tunnel_key)(void *ctx, void *key, int size, int flags) =

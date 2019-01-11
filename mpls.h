@@ -13,6 +13,8 @@
 #include "bpf_endian.h"
 #include <stdbool.h> 
 
+#define IPPROTO_MPLS 137
+
 #define MPLS_LS_LABEL_MASK      0xFFFFF000
 #define MPLS_LS_LABEL_SHIFT     12
 #define MPLS_LS_TC_MASK         0x00000E00
@@ -47,8 +49,8 @@
  *	S:      Bottom of Stack, 1 bit
  *	TTL:    Time to Live, 8 bits
  */
-struct mpls_shim_hdr {
-	unsigned int label_stack_entry;
+struct mpls_hdr {
+	unsigned int entry;
 };
 
 struct mpls_entry_decoded {
@@ -69,12 +71,20 @@ static inline bool is_eth_p_mpls(unsigned short eth_type)
 }
 
 /*
- * test whether mpl shim header is the bottom of the stack.
+ * check if the protocol type is either MPLS
+ */
+static inline bool is_ip_p_mpls(unsigned short ip_type)
+{
+	return ip_type == bpf_htons(IPPROTO_MPLS);
+}
+
+/*
+ * test whether mpl header is the bottom of the stack.
  * @param hdr the mpls header to test
  */
-static inline bool is_mpls_entry_bos(struct mpls_shim_hdr * hdr)
+static inline bool is_mpls_entry_bos(struct mpls_hdr * hdr)
 {
-	return hdr->label_stack_entry & bpf_htonl(MPLS_LS_S_MASK);
+	return hdr->entry & bpf_htonl(MPLS_LS_S_MASK);
 }
 
 
@@ -85,11 +95,11 @@ static inline bool is_mpls_entry_bos(struct mpls_shim_hdr * hdr)
  * @tc traffic class
  * @bos true/false if label is the bottom of the stack
  */
-static inline struct mpls_shim_hdr mpls_encode(unsigned int label, unsigned int ttl,
+static inline struct mpls_hdr mpls_encode(unsigned int label, unsigned int ttl,
 													 unsigned int tc, int bos)
 {
-	struct mpls_shim_hdr result;
-	result.label_stack_entry =
+	struct mpls_hdr result;
+	result.entry =
 		//we need to convert from CPU endian to network endian
 		bpf_htonl((label << MPLS_LS_LABEL_SHIFT) |
 			    (tc << MPLS_LS_TC_SHIFT) |
@@ -100,13 +110,13 @@ static inline struct mpls_shim_hdr mpls_encode(unsigned int label, unsigned int 
 
 /*
  * decode the header into a friendlier struct for easy access.
- * @hdr the shim header
+ * @hdr the mpls header
  */
-static inline struct mpls_entry_decoded mpls_entry_decode(struct mpls_shim_hdr *hdr)
+static inline struct mpls_entry_decoded mpls_entry_decode(struct mpls_hdr *hdr)
 {
 	struct mpls_entry_decoded result;
 	//we need to convert from network endian to host endian
-	unsigned int entry = bpf_ntohl(hdr->label_stack_entry);
+	unsigned int entry = bpf_ntohl(hdr->entry);
 
 	result.label = (entry & MPLS_LS_LABEL_MASK) >> MPLS_LS_LABEL_SHIFT;
 	result.ttl = (entry & MPLS_LS_TTL_MASK) >> MPLS_LS_TTL_SHIFT;

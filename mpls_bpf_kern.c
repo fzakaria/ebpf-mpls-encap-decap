@@ -32,6 +32,7 @@
 
 #define BPF_DROP 2
 #define BPF_OK 0
+#define BPF_ADJ_ROOM_NET 0
 
 /*
  * The Internet Protocol (IP) is defined in RFC 791.
@@ -87,14 +88,29 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * hton -> host to network order. Network order is always big-endian.
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
-  if (!is_eth_p_mpls(eth->h_proto)) {
-    bpf_printk("ethernet is not wrapping MPLS packet.\n");
+  if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+    bpf_printk("ethernet is not wrapping IP packet.\n");
     return BPF_OK;
   }
 
-  // mpls shim header is placed between L2 & L3
-  //==[ETH HDR][MPLS HDR][IP HDR][Data]==
-  struct mpls_shim_hdr *mpls = (struct mpls_shim_hdr *)(void *)(eth + 1);
+  struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
+
+  if ((void *)(iph + 1) > data_end) {
+    bpf_printk("socket buffer struct was malformed.\n");
+    return BPF_DROP;
+  }
+
+  // multiply ip header by 4 (bytes) to get the number of bytes of the header.
+  int iph_len = iph->ihl << 2;
+  if (iph_len > MAX_IP_HDR_LEN) {
+    bpf_printk("ip header is too long.\n");
+    return BPF_DROP;
+  }
+
+  // https://tools.ietf.org/html/rfc4023
+  //==[ETH HDR][IP HDR][MPLS HDR][Data]==
+  struct mpls_hdr *mpls = (struct mpls_hdr *)((void *)(iph) + iph_len);
+
   if ((void *)(mpls + 1) > data_end) {
     bpf_printk("socket buffer struct was malformed.\n");
     return BPF_DROP;
@@ -105,13 +121,26 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     return BPF_DROP;
   }
 
-  struct iphdr *iph = (struct iphdr *)(void *)(mpls + 1);
-
-  if ((void *)(iph + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+  /*
+   * We are going to shrink the skb which will overwrite the
+   */
+  struct ethhdr eth_copy;
+  int ret = bpf_skb_load_bytes(skb, 0, &eth_copy, sizeof(struct ethhdr));
+  if (ret) {
+    bpf_printk("error calling skb load bytes.\n");
     return BPF_DROP;
   }
 
+  /*
+   * This is the amount of padding we need to remove to be just left
+   * with eth * iphdr.
+   */
+  int padlen = sizeof(struct mpls_hdr);
+  ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
+  if (ret) {
+    bpf_printk("error calling skb adjust room.\n");
+    return BPF_DROP;
+  }
   return 0;
 }
 
