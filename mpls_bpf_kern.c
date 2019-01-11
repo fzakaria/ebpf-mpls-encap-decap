@@ -25,13 +25,12 @@
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
+#include <linux/pkt_cls.h>
 #include "bpf_endian.h"
 #include "bpf_helpers.h"
 #include "helpers.h"
 #include "mpls.h"
 
-#define BPF_DROP 2
-#define BPF_OK 0
 #define BPF_ADJ_ROOM_NET 0
 
 /*
@@ -79,7 +78,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    */
   if ((void *)(eth + 1) > data_end) {
     bpf_printk("socket buffer struct was malformed.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   /*
@@ -90,21 +89,21 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
     bpf_printk("ethernet is not wrapping IP packet.\n");
-    return BPF_OK;
+    return TC_ACT_SHOT;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
     bpf_printk("socket buffer struct was malformed.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
     bpf_printk("ip header is too long.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   // https://tools.ietf.org/html/rfc4023
@@ -113,7 +112,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
 
   if ((void *)(mpls + 1) > data_end) {
     bpf_printk("socket buffer struct was malformed.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   struct mpls_entry_decoded mpls_decoded = mpls_entry_decode(mpls);
@@ -122,7 +121,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
 
   if (!is_mpls_entry_bos(mpls)) {
     bpf_printk("mpls label not bottom of stack.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   /*
@@ -132,7 +131,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   int ret = bpf_skb_load_bytes(skb, 0, &eth_copy, sizeof(struct ethhdr));
   if (ret) {
     bpf_printk("error calling skb load bytes.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
   /*
@@ -150,10 +149,10 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
     bpf_printk("error calling skb adjust room.\n");
-    return BPF_DROP;
+    return TC_ACT_SHOT;
   }
 
-  return 0;
+  return TC_ACT_OK;
 }
 
 static char _license[] SEC("license") = "GPL";
