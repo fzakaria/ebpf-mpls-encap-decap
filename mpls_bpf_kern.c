@@ -114,8 +114,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("[decap] ethernet is not wrapping IP packet: %#x.\n",
-               eth->h_proto);
+    bpf_printk("[decap] ethernet is not wrapping IP packet\n");
     return TC_ACT_SHOT;
   }
 
@@ -199,6 +198,8 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     return TC_ACT_SHOT;
   }
 
+  bpf_printk("[encap] casted to eth header.\n");
+
   /*
    * We only care about IP packet frames. Don't do anything to other ethernet
    * packets like ARP.
@@ -218,12 +219,16 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     return TC_ACT_SHOT;
   }
 
+  bpf_printk("[encap] casted to ip header.\n");
+
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
     bpf_printk("[encap] ip header is too long: %d\n", iph_len);
     return TC_ACT_SHOT;
   }
+
+  bpf_printk("[encap] calculated ip header length.\n");
 
   /*
    * This is the amount of padding we need to remove to be just left
