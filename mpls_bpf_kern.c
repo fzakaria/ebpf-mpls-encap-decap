@@ -83,7 +83,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * is inside the valid access range for the packet.
    */
   if ((void *)(eth + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+    bpf_printk("[decap] socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
@@ -94,21 +94,22 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("ethernet is not wrapping IP packet.\n");
+    bpf_printk("[decap] ethernet is not wrapping IP packet: %#x.\n",
+               eth->h_proto);
     return TC_ACT_SHOT;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+    bpf_printk("[decap] socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
-    bpf_printk("ip header is too long.\n");
+    bpf_printk("[decap] ip header is too long: %d.\n", iph_len);
     return TC_ACT_SHOT;
   }
 
@@ -117,16 +118,16 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   struct mpls_hdr *mpls = (struct mpls_hdr *)((void *)(iph) + iph_len);
 
   if ((void *)(mpls + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+    bpf_printk("[decap] socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
   struct mpls_entry_decoded mpls_decoded = mpls_entry_decode(mpls);
 
-  bpf_printk("decoded MPLS label: %#x\n", mpls_decoded.label);
+  bpf_printk("[decap] decoded MPLS label: %#x\n", mpls_decoded.label);
 
   if (!is_mpls_entry_bos(mpls)) {
-    bpf_printk("mpls label not bottom of stack.\n");
+    bpf_printk("[decap] mpls label not bottom of stack.\n");
     return TC_ACT_SHOT;
   }
 
@@ -144,7 +145,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    */
   int ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
-    bpf_printk("error calling skb adjust room.\n");
+    bpf_printk("[decap] error calling skb adjust room.\n");
     return TC_ACT_SHOT;
   }
 
@@ -172,7 +173,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * is inside the valid access range for the packet.
    */
   if ((void *)(eth + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+    bpf_printk("[encap] socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
@@ -183,21 +184,22 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("ethernet is not wrapping IP packet.\n");
+    bpf_printk("[encap] ethernet is not wrapping IP packet: %#x.\n",
+               eth->h_proto);
     return TC_ACT_SHOT;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
-    bpf_printk("socket buffer struct was malformed.\n");
+    bpf_printk("[encap] socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
-    bpf_printk("ip header is too long.\n");
+    bpf_printk("[encap] ip header is too long: %d\n", iph_len);
     return TC_ACT_SHOT;
   }
 
@@ -215,7 +217,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    */
   int ret = bpf_skb_adjust_room(skb, padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
-    bpf_printk("error calling skb adjust room.\n");
+    bpf_printk("[encap] error calling skb adjust room.\n");
     return TC_ACT_SHOT;
   }
 
@@ -226,7 +228,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
   ret = bpf_skb_store_bytes(skb, (int)offset, &mpls, sizeof(struct mpls_hdr),
                             BPF_F_RECOMPUTE_CSUM);
 
-  bpf_printk("decoded MPLS label: %#x\n", MPLS_STATIC_LABEL);
+  bpf_printk("[encap] decoded MPLS label: %#x\n", MPLS_STATIC_LABEL);
 
   return TC_ACT_OK;
 }
