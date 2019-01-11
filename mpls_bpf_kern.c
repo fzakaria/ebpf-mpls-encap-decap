@@ -144,7 +144,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
 
   struct mpls_entry_decoded mpls_decoded = mpls_entry_decode(mpls);
 
-  bpf_printk("[decap] decoded MPLS label: %#x\n", mpls_decoded.label);
+  bpf_printk("[decap] decoded MPLS label: %x\n", mpls_decoded.label);
 
   if (!is_mpls_entry_bos(mpls)) {
     bpf_printk("[decap] mpls label not bottom of stack.\n");
