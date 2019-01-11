@@ -1,6 +1,6 @@
 /*******************************************************************************************
- *                              MPLS eBPF
- * This file contains an BPF (Berkely Packet Filter) for use within lwtunnel.
+ *                              MPLSinIP eBPF
+ * This file contains an BPF (Berkely Packet Filter) for use within tc (traffic control).
  *
  * BPF is a virtual-machine within the Linux kernel that supports a limited
  * instruction set (not turning complete). It allows user supplied code to be
