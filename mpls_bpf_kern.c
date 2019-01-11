@@ -114,8 +114,9 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("[decap] ethernet is not wrapping IP packet\n");
-    return TC_ACT_SHOT;
+    bpf_printk("[decap] ethernet is not wrapping IP packet: 0x%x\n",
+               bpf_ntohs(eth->h_proto));
+    return TC_ACT_OK;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
@@ -207,9 +208,9 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("[encap] ethernet is not wrapping IP packet: %d",
+    bpf_printk("[encap] ethernet is not wrapping IP packet: 0x%x",
                bpf_ntohs(eth->h_proto));
-    return TC_ACT_SHOT;
+    return TC_ACT_OK;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
@@ -248,7 +249,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     return TC_ACT_SHOT;
   }
 
-  bpf_printk("[encap] about to store bytes of MPLS label: %#x\n",
+  bpf_printk("[encap] about to store bytes of MPLS label: 0x%x\n",
              MPLS_STATIC_LABEL);
 
   // construct our deterministic mpls header
