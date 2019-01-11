@@ -53,6 +53,24 @@ static_assert(sizeof(struct ethhdr) == ETH_HLEN,
               "ethernet header size does not match.");
 
 /*
+ * Simple eBPF filters to use for debugging & testing.
+ */
+int allow_all(struct __sk_buff *skb);
+int deny_all(struct __sk_buff *skb);
+
+SEC("allow_all") int allow_all(struct __sk_buff *skb) {
+  (void)skb;  // supress unused warning
+  bpf_printk("[allow_all] allowing all packets through.\n");
+  return TC_ACT_OK;
+}
+
+SEC("deny_all") int deny_all(struct __sk_buff *skb) {
+  (void)skb;  // supress unused warning
+  bpf_printk("[deny_all] denying all packets.\n");
+  return TC_ACT_SHOT;
+}
+
+/*
  * Entry point for the encapsulation & decapsulation eBPF
  * __sk_buff is a "shadow" struct of the internal sk_buff.
  * You can read more how sk_buff works
