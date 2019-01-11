@@ -49,15 +49,15 @@ static_assert(sizeof(struct ethhdr) == ETH_HLEN,
               "ethernet header size does not match.");
 
 /*
- * Entry point for the encapsulation eBPF
+ * Entry point for the decapsulation eBPF
  * __sk_buff is a "shadow" struct of the internal sk_buff.
  * You can read more how sk_buff works
  * http://vger.kernel.org/~davem/skb_data.html
  * @skb the socket buffer struct
  */
-int mpls_encap(struct __sk_buff *skb);
+int mpls_decap(struct __sk_buff *skb);
 
-SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
+SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   /*
    * the redundant casts are needed according to the documentation.
    * possibly for the BPF verifier.
@@ -115,6 +115,10 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
     bpf_printk("socket buffer struct was malformed.\n");
     return BPF_DROP;
   }
+
+  struct mpls_entry_decoded mpls_decoded = mpls_entry_decode(mpls);
+
+  bpf_printk("decoded MPLS label: %#x\n", mpls_decoded.label);
 
   if (!is_mpls_entry_bos(mpls)) {
     bpf_printk("mpls label not bottom of stack.\n");
