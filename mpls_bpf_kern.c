@@ -207,7 +207,8 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_printk("[encap] ethernet is not wrapping IP packet");
+    bpf_printk("[encap] ethernet is not wrapping IP packet: %d",
+               bpf_ntohs(eth->h_proto));
     return TC_ACT_SHOT;
   }
 
