@@ -1,11 +1,11 @@
 /*******************************************************************************************
  *                              MPLSinIP eBPF
- * This file contains an BPF (Berkely Packet Filter) for use within tc (traffic control).
+ * This file contains a BPF (Berkeley Packet Filter) for use within tc (traffic control).
  *
  * BPF is a virtual-machine within the Linux kernel that supports a limited
- * instruction set (not turning complete). It allows user supplied code to be
+ * instruction set (not Turing complete). It allows user supplied code to be
  * executed during key points within the kernel. The kernel verifies all BPF
- * programs such that they don't address invalid memory & that the time spent in
+ * programs so that they don't address invalid memory & that the time spent in
  * the BPF program is limited by dis-allowing loops & setting a maximum number
  * of instructions.
  *
@@ -41,7 +41,7 @@
 /*
  * The Internet Protocol (IP) is defined in RFC 791.
  * The RFC specifies the format of the IP header.
- * In the header there is the IHL (Internet Header Length) field which is 4bits
+ * In the header there is the IHL (Internet Header Length) field which is 4bit
  * long
  * and specifies the header length in 32bit words.
  * The IHL field can hold values from 0 (Binary 0000) to 15 (Binary 1111).
@@ -73,7 +73,7 @@ SEC("deny_all") int deny_all(struct __sk_buff *skb) {
 /*
  * Entry point for the encapsulation & decapsulation eBPF
  * __sk_buff is a "shadow" struct of the internal sk_buff.
- * You can read more how sk_buff works
+ * You can read more about how sk_buff works at:
  * http://vger.kernel.org/~davem/skb_data.html
  * @skb the socket buffer struct
  */

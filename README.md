@@ -1,9 +1,9 @@
-# MPLS Encapsulation & Decapsulation via eBPF 
+# MPLS Encapsulation & Decapsulation via eBPF
 
 > This is a small tiny BPF filter that demonstrates how to encap/decap an IPv4 packet with MPLS.
 
-This goals of this project is to be a good learning resource & skeleton project of how best to setup
-a project for writing & building an eBPF filter. Documentation on the subject is scattered largely for eBPF across man-pages, e-mail lists & blog-posts. What's worse, is that the date of publication of many of them are quite old now, and don't reflect the best practices as of today.
+The goal of this project is to be a good learning resource & skeleton project of how to setup
+a project for writing & building an eBPF filter. Documentation on the subject is scattered largely for eBPF across man-pages, e-mail lists & blog-posts. What's worse is that the date of publication of many of them are quite old now, and don't reflect the best practices as of today.
 
 The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/eBPF-mpls-encap-decap/blob/master/mpls_bpf_kern.c), with the source __heavily__ commented to help new readers understand what is going on.
 
@@ -12,6 +12,7 @@ The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/eBPF-m
 This example performs MPLSinIP encapsulation/decapsulation as defined in [RFC4023](https://tools.ietf.org/html/rfc4023).
 
 MPLS-in-IP messages have the following format:
+
 ```
              +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
              |                                     |
@@ -36,7 +37,7 @@ MPLS label is defined in [RFC3032](https://tools.ietf.org/html/rfc3032):
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
   |                Label                  | TC  |S|       TTL     |
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- 
+
  	Label:  Label Value, 20 bits
  	TC:     Traffic Class field, 3 bits
  	S:      Bottom of Stack, 1 bit
@@ -48,21 +49,21 @@ perform different actions based on the label value.
 
 ## Testing
 
-
 ### Setup Virtual Network Interfaces
+
 We will first create a pair of virtual network interfaces that will serve as the encap/decap pair for testing
 purposes. In order to use Linux `tc` with a virtual interface, one of them __must be__ placed within a network namespace.
 
-```
+```bash
 ip link add veth0 type veth peer name veth1
 ip netns add test
 ip link set veth0 netns test
-p link set veth1 up
+ip link set veth1 up
 ip netns exec test ip link set veth0 up
 ip addr add 10.1.0.2/24 dev veth1
 ip netns exec test ip addr add 10.1.0.1/24 dev veth0
 
-# add a qdisc to both devices in order to attach bpf filters
+# Add a qdisc to both devices in order to attach bpf filters
 tc qdisc add dev veth1 clsact
 ip netns exec test tc qdisc add dev veth0 clsact
 
@@ -76,13 +77,13 @@ PING 10.1.0.1 (10.1.0.1) from 10.1.0.2 : 56(84) bytes of data.
 
 ### Adding eBPF Filters
 
-We've set verbose flag, so you will see the output of the eBPF verifier. The below command uses `ip netns exec` to run `tc` for the device in the network namespace.
+We've set verbose flag, so you will see the output of the eBPF verifier. The command below uses `ip netns exec` to run `tc` for the device in the network namespace.
 
-```
+```bash
 ip netns exec test tc filter add dev veth0 ingress bpf da obj mpls.bpf sec mpls_decap verbose
 tc filter add dev veth1 egress bpf da obj mpls.bpf sec mpls_encap verbose
 
-# verify you can see them !
+# Verify you can see them !
 ip netns exec test tc filter show dev veth0 ingress
 tc filter show dev veth1 egress
 
@@ -96,13 +97,13 @@ PING 10.1.0.1 (10.1.0.1) from 10.1.0.2 : 56(84) bytes of data.
 
 ### Verifying & Debugging
 
-In order to verify all is working lets check the debug trace logs! 
+In order to verify all is working let's check the debug trace logs!
 
-```
-# turn on tracing logs
+```bash
+# Turn on tracing logs
 echo 1 > /sys/kernel/debug/tracing/tracing_on
 
-# you can cat the pipe
+# You can cat the pipe
 cat /sys/kernel/debug/tracing/trace_pipe
 
 # tc also provides a simple way to view it
@@ -118,7 +119,7 @@ ping-3964  [001] ..s1 174556.399537: 0x00000001: [decap] finished mpls decap.
 
 You can list all BPF programs loaded:
 
-```
+```bash
 bpftool prog
 
 42: sched_cls  tag c2678af39418836e
@@ -129,7 +130,7 @@ bpftool prog
 
 You can also view the output of the JIT if you run the following.
 
-```
+```bash
 bpftool prog dump jited id 42
 
 ...
@@ -138,13 +139,13 @@ bpftool prog dump jited id 42
  3be:	jmpq   0x0000000000000197
 ...
 
-# on older linux kernels, you have to explicitly turn on JIT 
+# On older linux kernels, you have to explicitly turn on JIT
 # echo 1 > /proc/sys/net/core/bpf_jit_enable
 ```
 
 You can use `llvm-objdump` to also see the contents of the eBPF
 
-```
+```bash
 # -g prints the line numbers
 # -S prints the instructions with associated C code
 llvm-objdump -S -g mpls.bpf
@@ -153,12 +154,13 @@ llvm-objdump -S -g mpls.bpf
 ### Cleanup
 
 You can cleanup the tc filters:
-```
+
+```bash
 ip netns exec test tc filter del dev veth0 ingress
 tc filter del dev veth1 egress
 ```
 
-## Building 
+## Building
 
 You can build on an _OracleLinux 7.6_ machine or there is limited support for OSX via _docker_.
 
@@ -175,8 +177,8 @@ make
 Simply use the provided `Makefile` but be sure to run the `docker` target.
 
 ```bash
-# install llvm latest if you don't have it!
+# Install llvm latest if you don't have it!
 brew install --with-toolchain llvm
-# builds the BPF filter in an OracleLinux docker image
+# Builds the BPF filter in an OracleLinux docker image
 make docker
 ```
