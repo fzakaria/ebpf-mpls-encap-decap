@@ -8,6 +8,15 @@
 
 #include "bpf_helpers.h"
 
+
+/**
+ * Aside from BPF helper calls and BPF tail calls, the BPF instruction did not arbitrary 
+ * support functions -- as a result all functions need the inline macro.
+ * Starting with Linux kernel 4.16 and LLVM 6.0 this restriction got lifted.
+ * The typical inline keyword is only a hint whereas this is definitive.
+ */
+#define forced_inline __attribute__((always_inline))
+
 /* 
  * helper macro to place programs, maps, license in
  * different sections in elf_bpf file. Section names

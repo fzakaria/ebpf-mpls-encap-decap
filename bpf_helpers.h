@@ -4,6 +4,41 @@
 /* BPF_FUNC_skb_store_bytes flags. */
 #define BPF_F_RECOMPUTE_CSUM		(1ULL << 0)
 
+#define PIN_NONE		    0
+#define PIN_OBJECT_NS		1
+#define PIN_GLOBAL_NS		2
+
+/* 
+ * ELF map definition used by iproute2.
+ * Cannot figure out how to get bpf_elf.h installed on system, so we've copied it here.
+ * iproute2 claims this struct will remain backwards compatible
+ * https://github.com/kinvolk/iproute2/blob/be55416addf76e76836af6a4dd94b19c4186e1b2/include/bpf_elf.h
+ */
+struct bpf_elf_map {
+	/*
+	 * The various BPF MAP types supported (see enum bpf_map_type)
+	 * https://elixir.bootlin.com/linux/latest/source/include/uapi/linux/bpf.h
+	 */
+	__u32 type;
+	__u32 size_key;
+	__u32 size_value;
+	__u32 max_elem;
+	/*
+	 * Various flags you can place such as `BPF_F_NO_COMMON_LRU`
+	 */
+	__u32 flags;
+	__u32 id;
+	/*
+	 * Pinning is how the map are shared across process boundary.
+	 * Cillium has a good explanation of them: http://docs.cilium.io/en/v1.3/bpf/#llvm
+	 * PIN_GLOBAL_NS - will get pinned to `/sys/fs/bpf/tc/globals/${variable-name}`
+	 * PIN_OBJECT_NS - will get pinned to a directory that is unique to this object
+	 * PIN_NONE - the map is not placed into the BPF file system as a node,
+	 			  and as a result will not be accessible from user space
+	 */
+	__u32 pinning;
+};
+
 /* helper functions called from eBPF programs written in C */
 static void *(*bpf_map_lookup_elem)(void *map, void *key) =
 	(void *) BPF_FUNC_map_lookup_elem;
@@ -81,19 +116,6 @@ unsigned long long load_half(void *skb,
 			     unsigned long long off) asm("llvm.bpf.load.half");
 unsigned long long load_word(void *skb,
 			     unsigned long long off) asm("llvm.bpf.load.word");
-
-/* a helper structure used by eBPF C program
- * to describe map attributes to elf_bpf loader
- */
-struct bpf_map_def {
-	unsigned int type;
-	unsigned int key_size;
-	unsigned int value_size;
-	unsigned int max_entries;
-	unsigned int map_flags;
-	unsigned int inner_map_idx;
-	unsigned int numa_node;
-};
 
 static int (*bpf_skb_load_bytes)(void *ctx, int off, void *to, int len) =
 	(void *) BPF_FUNC_skb_load_bytes;
