@@ -1,6 +1,7 @@
 /*******************************************************************************************
  *                              MPLSinIP eBPF
- * This file contains a BPF (Berkeley Packet Filter) for use within tc (traffic control).
+ * This file contains a BPF (Berkeley Packet Filter) for use within tc
+ * (traffic-control).
  *
  * BPF is a virtual-machine within the Linux kernel that supports a limited
  * instruction set (not Turing complete). It allows user supplied code to be
