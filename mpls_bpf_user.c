@@ -145,7 +145,7 @@ void show(void) {
   if (ret != 0) {
     fprintf(stderr, "Could not lookup value [%s].\n", strerror(errno));
   } else {
-    printf("%s", value ? "true" : "false");
+    printf("debug flag: %s\n", value ? "true" : "false");
   }
 }
 
