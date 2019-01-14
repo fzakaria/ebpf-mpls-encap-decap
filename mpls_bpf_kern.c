@@ -38,7 +38,7 @@
 
 #define BPF_ADJ_ROOM_NET 0
 
-static struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
+struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
     .type = BPF_MAP_TYPE_ARRAY,
     .size_key = sizeof(unsigned int),
     .size_value = sizeof(bool),
@@ -49,7 +49,7 @@ static struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
 /*
  * Check whether the debug flag is set via user space.
  */
-static forced_inline bool is_debug() {
+forced_inline bool is_debug() {
   int index = 0;  // the map has size of 1 so index is always 0
   bool *value = (bool *)bpf_map_lookup_elem(&DEBUGS_MAP, &index);
   if (!value) {
