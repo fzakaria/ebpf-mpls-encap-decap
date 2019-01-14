@@ -110,9 +110,7 @@ long get_map_fd(void) {
   char pinned_file[256];
   snprintf(pinned_file, sizeof(pinned_file), "%s/%s", TC_GLOBAL_NS,
            BPF_MAP_NAME);
-  long fd = bpf_obj_get(pinned_file);
-  printf("found file descriptor [%ld]", fd);
-  return fd;
+  return bpf_obj_get(pinned_file);
 }
 
 void show(void) {
@@ -123,13 +121,13 @@ void show(void) {
     return;
   }
 
-  bool *value = calloc(1, sizeof(bool));
+  bool value = false;
   int index = 0;
-  long ret = bpf_map_lookup_elem((unsigned int)fd, &index, value);
+  long ret = bpf_map_lookup_elem((unsigned int)fd, &index, &value);
   if (ret != 0) {
     fprintf(stderr, "Could not lookup value [%s].\n", strerror(errno));
   } else {
-    printf("%s", (*value) ? "true" : "false");
+    printf("%s", value ? "true" : "false");
   }
 }
 
@@ -146,6 +144,8 @@ void disable(void) {
   if (ret != 0) {
     fprintf(stderr, "Could not update element [%ld] [%s].\n", ret,
             strerror(errno));
+  } else {
+    printf("Successfully disabled.");
   }
 }
 
@@ -156,14 +156,14 @@ void enable(void) {
             BPF_MAP_NAME, strerror(errno));
     return;
   }
-  bool *value = calloc(1, sizeof(bool));
-  (*value) = true;
+  bool value = false;
   int index = 0;
-  long ret = bpf_map_update_elem((unsigned int)fd, &index, value, BPF_ANY);
+  long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
   if (ret != 0) {
-    perror("bpf_map_update_elem");
     fprintf(stderr, "Could not update element [%ld] [%s].\n", ret,
             strerror(errno));
+  } else {
+    printf("Successfully enabled.");
   }
 }
 
