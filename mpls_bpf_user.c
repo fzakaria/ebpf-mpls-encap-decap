@@ -27,6 +27,11 @@
 #endif
 #endif
 
+/* flags for BPF_MAP_UPDATE_ELEM command */
+#define BPF_ANY 0     /* create new element or update existing */
+#define BPF_NOEXIST 1 /* create new element only if it didn't exist */
+#define BPF_EXIST 2   /* only update existing element */
+
 static unsigned long ptr_to_u64(const void *ptr) { return (unsigned long)ptr; }
 
 long bpf_obj_get(const char *pathname);
@@ -99,12 +104,17 @@ struct arguments {
 void show(void);
 void disable(void);
 void enable(void);
+long get_map_fd(void);
 
-void show(void) {
+long get_map_fd(void) {
   char pinned_file[256];
   snprintf(pinned_file, sizeof(pinned_file), "%s/%s", TC_GLOBAL_NS,
            BPF_MAP_NAME);
-  long fd = bpf_obj_get(pinned_file);
+  return bpf_obj_get(pinned_file);
+}
+
+void show(void) {
+  long fd = get_map_fd();
   if (fd < 0) {
     fprintf(stderr, "could not find map %s [%s]. Default is false.\n",
             BPF_MAP_NAME, strerror(errno));
@@ -112,13 +122,40 @@ void show(void) {
   }
 
   bool value = false;
-  bpf_map_lookup_elem((unsigned int)fd, 0, &value);
+  int index = 0;
+  bpf_map_lookup_elem((unsigned int)fd, &index, &value);
   printf("%s", value ? "true" : "false");
 }
 
-void disable(void) {}
+void disable(void) {
+  long fd = get_map_fd();
+  if (fd < 0) {
+    fprintf(stderr, "could not find map %s [%s]. Cannot disable.\n",
+            BPF_MAP_NAME, strerror(errno));
+    return;
+  }
+  int index = 0;
+  bool value = false;
+  long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
+  if (!ret) {
+    fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
+  }
+}
 
-void enable(void) {}
+void enable(void) {
+  long fd = get_map_fd();
+  if (fd < 0) {
+    fprintf(stderr, "could not find map %s [%s]. Cannot enable.\n",
+            BPF_MAP_NAME, strerror(errno));
+    return;
+  }
+  bool value = false;
+  int index = 0;
+  long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
+  if (!ret) {
+    fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
+  }
+}
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   /* Get the input argument from argp_parse, which we
