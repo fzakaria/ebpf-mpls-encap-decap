@@ -15,15 +15,23 @@
  * When building perf, unistd.h is override. Define NR_bpf is
  * required to be defined.
  */
-#ifndef NR_bpf
+/*
+ * When building perf, unistd.h is overridden. __NR_bpf is
+ * required to be defined explicitly.
+ */
+#ifndef __NR_bpf
 #if defined(__i386__)
-#define NR_bpf 357
+#define __NR_bpf 357
 #elif defined(__x86_64__)
-#define NR_bpf 321
+#define __NR_bpf 321
 #elif defined(__aarch64__)
-#define NR_bpf 280
+#define __NR_bpf 280
+#elif defined(__sparc__)
+#define __NR_bpf 349
+#elif defined(__s390__)
+#define __NR_bpf 351
 #else
-#error NR_bpf not defined. libbpf does not support your arch.
+#error __NR_bpf not defined. libbpf does not support your arch.
 #endif
 #endif
 
@@ -34,37 +42,47 @@
 
 static unsigned long ptr_to_u64(const void *ptr) { return (unsigned long)ptr; }
 
+static inline long sys_bpf(enum bpf_cmd cmd, union bpf_attr *attr,
+                           unsigned int size) {
+  return syscall(__NR_bpf, cmd, attr, size);
+}
+
 long bpf_obj_get(const char *pathname);
 long bpf_map_update_elem(unsigned int fd, void *key, void *value,
                          unsigned long long flags);
 long bpf_map_lookup_elem(unsigned int fd, void *key, void *value);
 
 long bpf_obj_get(const char *pathname) {
-  union bpf_attr attr = {
-      .pathname = ptr_to_u64((const void *)pathname),
-  };
+  union bpf_attr attr;
 
-  return syscall(NR_bpf, BPF_OBJ_GET, &attr, sizeof(attr));
+  bzero(&attr, sizeof(attr));
+  attr.pathname = ptr_to_u64((const void *)pathname);
+
+  return sys_bpf(BPF_OBJ_GET, &attr, sizeof(attr));
 }
 
 long bpf_map_update_elem(unsigned int fd, void *key, void *value,
                          unsigned long long flags) {
-  union bpf_attr attr = {
-      .map_fd = fd,
-      .key = ptr_to_u64(key),
-      .value = ptr_to_u64(value),
-      .flags = flags,
-  };
+  union bpf_attr attr;
 
-  return syscall(NR_bpf, BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr));
+  bzero(&attr, sizeof(attr));
+  attr.map_fd = fd;
+  attr.key = ptr_to_u64(key);
+  attr.value = ptr_to_u64(value);
+  attr.flags = flags;
+
+  return sys_bpf(BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr));
 }
 
 long bpf_map_lookup_elem(unsigned int fd, void *key, void *value) {
-  union bpf_attr attr = {
-      .map_fd = fd, .key = ptr_to_u64(key), .value = ptr_to_u64(value),
-  };
+  union bpf_attr attr;
 
-  return syscall(NR_bpf, BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr));
+  bzero(&attr, sizeof(attr));
+  attr.map_fd = fd;
+  attr.key = ptr_to_u64(key);
+  attr.value = ptr_to_u64(value);
+
+  return sys_bpf(BPF_MAP_LOOKUP_ELEM, &attr, sizeof(attr));
 }
 
 /*********************************************************************************/
