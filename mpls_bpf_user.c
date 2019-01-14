@@ -124,7 +124,7 @@ void show(void) {
   bool *value = calloc(1, sizeof(bool));
   int index = 0;
   long ret = bpf_map_lookup_elem((unsigned int)fd, &index, value);
-  if (!ret) {
+  if (ret != 0) {
     fprintf(stderr, "Could not lookup value [%s].\n", strerror(errno));
   } else {
     printf("%s", (*value) ? "true" : "false");
@@ -141,7 +141,7 @@ void disable(void) {
   int index = 0;
   bool value = false;
   long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
-  if (!ret) {
+  if (ret != 0) {
     fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
   }
 }
@@ -157,7 +157,7 @@ void enable(void) {
   (*value) = true;
   int index = 0;
   long ret = bpf_map_update_elem((unsigned int)fd, &index, value, BPF_ANY);
-  if (!ret) {
+  if (ret != 0) {
     fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
   }
 }
