@@ -1,5 +1,7 @@
 #include <argp.h>
+#include <errno.h>
 #include <linux/bpf.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -62,6 +64,16 @@ long bpf_map_lookup_elem(unsigned int fd, void *key, void *value) {
 
 /*********************************************************************************/
 
+/**
+ * When PIN_GLOBAL_NS is used, this is deafult global namespace that is loaded.
+ */
+static const char *TC_GLOBAL_NS = "/sys/fs/bpf/tc/globals";
+
+/**
+ * The name of the BPF MAP variable in mpls_bpf_berk.c
+ */
+static const char *BPF_MAP_NAME = "DEBUGS_MAP";
+
 const char *argp_program_version = "mpls_bpf_user 1.0";
 const char *argp_program_bug_address = "<farid.m.zakaria@gmail.com>";
 
@@ -88,7 +100,21 @@ void show(void);
 void disable(void);
 void enable(void);
 
-void show(void) {}
+void show(void) {
+  char pinned_file[256];
+  snprintf(pinned_file, sizeof(pinned_file), "%s/%s", TC_GLOBAL_NS,
+           BPF_MAP_NAME);
+  long fd = bpf_obj_get(pinned_file);
+  if (fd < 0) {
+    fprintf(stderr, "could not find map %s [%s]. Default is false.\n",
+            BPF_MAP_NAME, strerror(errno));
+    return;
+  }
+
+  bool value = false;
+  bpf_map_lookup_elem((unsigned int)fd, 0, &value);
+  printf("%s", value ? "true" : "false");
+}
 
 void disable(void) {}
 
@@ -107,7 +133,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         arguments->cmd = &show;
       } else if (strcmp(arg, "disable") == 0) {
         arguments->cmd = &disable;
-      } else if (strcmp(arg, "show") == 0) {
+      } else if (strcmp(arg, "enable") == 0) {
         arguments->cmd = &enable;
       } else {
         argp_error(state, "%s is not a valid command", arg);
