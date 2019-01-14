@@ -121,13 +121,13 @@ void show(void) {
     return;
   }
 
-  bool value = false;
+  bool *value = calloc(1, sizeof(bool));
   int index = 0;
-  long ret = bpf_map_lookup_elem((unsigned int)fd, &index, &value);
+  long ret = bpf_map_lookup_elem((unsigned int)fd, &index, value);
   if (!ret) {
     fprintf(stderr, "Could not lookup value [%s].\n", strerror(errno));
   } else {
-    printf("%s", value ? "true" : "false");
+    printf("%s", (*value) ? "true" : "false");
   }
 }
 
