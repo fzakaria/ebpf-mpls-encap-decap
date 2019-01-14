@@ -163,7 +163,7 @@ void disable(void) {
     fprintf(stderr, "Could not update element [%ld] [%s].\n", ret,
             strerror(errno));
   } else {
-    printf("Successfully disabled.");
+    printf("Successfully disabled.\n");
   }
 }
 
@@ -181,7 +181,7 @@ void enable(void) {
     fprintf(stderr, "Could not update element [%ld] [%s].\n", ret,
             strerror(errno));
   } else {
-    printf("Successfully enabled.");
+    printf("Successfully enabled.\n");
   }
 }
 
