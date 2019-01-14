@@ -149,7 +149,7 @@ void enable(void) {
             BPF_MAP_NAME, strerror(errno));
     return;
   }
-  bool value = false;
+  bool value = true;
   int index = 0;
   long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
   if (!ret) {
