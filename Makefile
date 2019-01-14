@@ -93,7 +93,7 @@ $(BPF_OBJ_FILES) : $(BPF_SRC_FILES)
 
 clean:
 	@echo "Cleaning the build..."
-	rm -f $(DEP_FILES) $(OBJ_FILES) $(TARGET)
+	rm -f $(DEP_FILES) $(OBJ_FILES) $(TARGET) $(USER_TARGET)
 
 
 # MMD generates dependency files in Makefile format
