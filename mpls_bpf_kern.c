@@ -38,7 +38,7 @@
 
 #define BPF_ADJ_ROOM_NET 0
 
-static struct bpf_elf_map DEBUGS_MAP SEC("maps") = {
+static struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
     .type = BPF_MAP_TYPE_ARRAY,
     .size_key = sizeof(unsigned int),
     .size_value = sizeof(bool),
