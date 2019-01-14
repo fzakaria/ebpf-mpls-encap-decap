@@ -101,6 +101,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   switch (key) {
     case ARGP_KEY_NO_ARGS:
       argp_usage(state);
+      break;
     case ARGP_KEY_ARG:
       if (strcmp(arg, "show") == 0) {
         arguments->cmd = &show;
@@ -109,11 +110,13 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
       } else if (strcmp(arg, "show") == 0) {
         arguments->cmd = &enable;
       } else {
-        return ARGP_ERR_UNKNOWN;
+        argp_error(state, "%s is not a valid command", arg);
       }
+      break;
     default:
       return ARGP_ERR_UNKNOWN;
   }
+  return 0;
 }
 
 /* Our argp parser. */
