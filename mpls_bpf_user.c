@@ -123,8 +123,12 @@ void show(void) {
 
   bool value = false;
   int index = 0;
-  bpf_map_lookup_elem((unsigned int)fd, &index, &value);
-  printf("%s", value ? "true" : "false");
+  int ret = bpf_map_lookup_elem((unsigned int)fd, &index, &value);
+  if (!ret) {
+    fprintf(stderr, "Could not lookup value.\n", strerror(errno));
+  } else {
+    printf("%s", value ? "true" : "false");
+  }
 }
 
 void disable(void) {
