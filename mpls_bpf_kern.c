@@ -51,7 +51,11 @@ static struct bpf_elf_map DEBUGS_MAP SEC("maps") = {
  */
 static forced_inline bool is_debug() {
   int index = 0;  // the map has size of 1 so index is always 0
-  return *((bool *)bpf_map_lookup_elem(&DEBUGS_MAP, &index));
+  bool *value = (bool *)bpf_map_lookup_elem(&DEBUGS_MAP, &index);
+  if (!value) {
+    return false;
+  }
+  return *value;
 }
 
 #define bpf_debug_printk(fmt, ...)                               \

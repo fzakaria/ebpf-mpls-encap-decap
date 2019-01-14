@@ -5,16 +5,17 @@ BPF_TARGET := mpls.bpf
 # Use wildcard expansion to find all source files
 BPF_SRC_FILES := $(wildcard *_kern.c)
 BPF_OBJ_FILES := $(BPF_SRC_FILES:.c=.o)
-DEP_FILES := $(OBJ_FILES:%.o=%.d)
+BPF_DEP_FILES := $(BPF_OBJ_FILES:%.o=%.d)
 ######################################################################################################
 USER_TARGET := mpls.bin
 # Use wildcard expansion to find all source files
-USER_SRC_FILES := $(wildcard *_kern.c)
-USER_OBJ_FILES := $(BPF_SRC_FILES:.c=.o)
-DEP_FILES := $(OBJ_FILES:%.o=%.d)
+USER_SRC_FILES := $(wildcard *_user.c)
+USER_OBJ_FILES := $(USER_SRC_FILES:.c=.o)
+USER_DEP_FILES := $(USER_OBJ_FILES:%.o=%.d)
 ######################################################################################################
 SRC_FILES := $(wildcard *.c)
 OBJ_FILES := $(wildcard *.o)
+DEP_FILES := $(wildcard *.d)
 ######################################################################################################
 # clang is the front-end compiler for various languages and uses LLVM as it's backend
 CLANG ?= clang
@@ -36,7 +37,7 @@ docker:
 	@docker build -t mpls-ebpf-build:latest -f Dockerfile.build .
 	@docker run -v $(shell pwd):/eBPF-mpls-encap-decap mpls-ebpf-build:latest
 
-all : format $(BPF_TARGET)
+all : format $(BPF_TARGET) $(USER_TARGET)
 	@echo "Finished."
 
 format:
@@ -46,7 +47,27 @@ format:
 	@# -style : set the style to the desired type
 	$(CLANG_FORMAT) -i -style Google -sort-includes $(SRC_FILES)
 
-$(BPF_TARGET): $(OBJ_FILES)
+$(USER_TARGET) : $(USER_OBJ_FILES)
+	$(CLANG) -o $(USER_TARGET) $(USER_OBJ_FILES)
+	@chmod +x $(USER_TARGET)
+
+$(USER_OBJ_FILES) : $(USER_SRC_FILES)
+	@# $@ is the name of the file being generated
+	@# $< the first prerequisite (usually the source file)
+	@echo "Building the MPLS user file..."
+	@echo "Building $@ from $<"
+	@# -c : Only run preprocess, compilation & assemble steps
+	@# -g : Generate source-level debug information
+	@# -Weverything : Enable all warning (seriously)
+	@# -o : Write output to file <arg>
+	@# -x : Treat subsequent input files as having type <language>
+	@# -target : Target the bpf instruction set
+	@# -O2 : Moderate level of optimization which enables most optimizations.
+	@# -MMD :  Write a depfile containing user headers
+	@# -Wno-pedantic : eBPF has you explicitly cast which is pedantic. Turn off the warning.
+	$(CLANG) -MMD -O2 -Weverything -Wno-pedantic -c -g -o $@ -x c $<
+
+$(BPF_TARGET): $(BPF_OBJ_FILES)
 	@# $@ is the name of the file being generated
 	@# $< the first prerequisite (usually the source file)
 	@echo "Linking $< to build $@"
@@ -77,5 +98,5 @@ clean:
 
 # MMD generates dependency files in Makefile format
 # therefore we have to include the rules.
--include $(DEP_FILES)
+-include $(BPF_DEP_FILES) $(USER_DEP_FILES)
 
