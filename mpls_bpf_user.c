@@ -142,7 +142,7 @@ void disable(void) {
   bool value = false;
   long ret = bpf_map_update_elem((unsigned int)fd, &index, &value, BPF_ANY);
   if (ret != 0) {
-    fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
+    fprintf(stderr, "Could not update element [%d] [%s].\n", ret, strerror(errno));
   }
 }
 
@@ -158,7 +158,7 @@ void enable(void) {
   int index = 0;
   long ret = bpf_map_update_elem((unsigned int)fd, &index, value, BPF_ANY);
   if (ret != 0) {
-    fprintf(stderr, "Could not update element [%s].\n", strerror(errno));
+    fprintf(stderr, "Could not update element [%d] [%s].\n", ret, strerror(errno));
   }
 }
 
