@@ -151,6 +151,23 @@ You can use `llvm-objdump` to also see the contents of the eBPF
 llvm-objdump -S -g mpls.bpf
 ```
 
+### Userland command
+
+A `mpls.bin` command is provided, that allows interacting with the eBPF program loaded.
+You can _enable_ or _disable_ the debug output.
+
+This will change the visibility of the debug print messages in `/sys/kernel/debug/tracing/trace_pipe` 
+
+```bash
+./mpls.bin show
+debug flag: false
+
+ ./mpls.bin enable
+Successfully enabled.
+```
+
+> Note: enable & disable only affects the veth in the current namespace which has its own BPF map in `/sys/fs/bpf/ip/globals/DEBUGS_MAP`. Using `ip netns exec test` also did not work, as the _bpf filesystem_ was no longer mounted.
+
 ### Cleanup
 
 You can cleanup the tc filters:

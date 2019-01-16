@@ -6,3 +6,6 @@
 
 # Don't include target files
 *.bpf
+
+# Don't include user target file
+*.bin
