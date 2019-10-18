@@ -5,7 +5,7 @@
 The goal of this project is to be a good learning resource & skeleton project of how to setup
 a project for writing & building an eBPF filter. Documentation on the subject is scattered largely for eBPF across man-pages, e-mail lists & blog-posts. What's worse is that the date of publication of many of them are quite old now, and don't reflect the best practices as of today.
 
-The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/mpls_bpf_kern.c), with the source __heavily__ commented to help new readers understand what is going on.
+The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/ebpf-mpls-encap-decap/blob/master/mpls_bpf_kern.c), with the source __heavily__ commented to help new readers understand what is going on.
 
 ## MPLSinIP
 
@@ -172,7 +172,7 @@ Successfully enabled.
 
 ### Cleanup
 
-Running the [test.sh](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/test.sh) script deletes at the start any network namespace prior and starts off fresh.
+Running the [test.sh](https://github.com/fzakaria/ebpf-mpls-encap-decap/blob/master/test.sh) script deletes at the start any network namespace prior and starts off fresh.
 
 ## Building
 
