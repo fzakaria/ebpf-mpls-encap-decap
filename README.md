@@ -49,7 +49,7 @@ perform different actions based on the label value.
 
 ## Testing
 
-A simple file [test.sh](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/test.sh) is included that will:
+A simple file [test.sh](https://github.com/fzakaria/ebpf-mpls-encap-decap/blob/master/test.sh) is included that will:
 
 1. Create two network namespaces: machine-1 & machine-2
 2. Create a virtual network interface pair; one in each network namespace
