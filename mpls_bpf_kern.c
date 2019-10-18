@@ -37,8 +37,17 @@
  */
 #define MPLS_STATIC_LABEL 69
 
+/**
+ * Adjust room at the network layer
+ * (room space is added or removed below the layer 3 header).
+ * https://elixir.bootlin.com/linux/v5.3.6/source/include/uapi/linux/bpf.h#L1536
+ */
 #define BPF_ADJ_ROOM_NET 0
 
+/**
+ * A really simple BPF map that controls a switch
+ * whether the debug printk messages are emitted.
+ */
 struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
     .type = BPF_MAP_TYPE_ARRAY,
     .size_key = sizeof(unsigned int),
@@ -50,6 +59,8 @@ struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
 /*
  * Check whether the debug flag is set via user space.
  */
+bool is_debug(void);
+
 forced_inline bool is_debug() {
   int index = 0;  // the map has size of 1 so index is always 0
   bool *value = (bool *)bpf_map_lookup_elem(&DEBUGS_MAP, &index);
@@ -82,22 +93,19 @@ static_assert(sizeof(struct ethhdr) == ETH_HLEN,
               "ethernet header size does not match.");
 
 /*
- * Simple eBPF filters to use for debugging & testing.
+ * Since packet handling and printk can be interleaved, this will
+ * add a unique identifier for an individual invocation so you can grep the
+ * request identifier and see the log messags in isolation.
+ *
+ * This is a macro because in a real-example you might want to make this
+ * a no-op for non-debug builds to avoid the cost of the call.
  */
-int allow_all(struct __sk_buff *skb);
-int deny_all(struct __sk_buff *skb);
+#define REQUEST_ID() bpf_get_prandom_u32()
 
-SEC("allow_all") int allow_all(struct __sk_buff *skb) {
-  (void)skb;  // supress unused warning
-  bpf_printk("[allow_all] allowing all packets through.\n");
-  return TC_ACT_OK;
-}
+#define DEBUG(x, ...) bpf_debug_printk(x, ##__VA_ARGS__)
 
-SEC("deny_all") int deny_all(struct __sk_buff *skb) {
-  (void)skb;  // supress unused warning
-  bpf_printk("[deny_all] denying all packets.\n");
-  return TC_ACT_SHOT;
-}
+#define DEBUG_DECAP(id, x, ...) DEBUG("[decap][%u]" x, id, ##__VA_ARGS__)
+#define DEBUG_ENCAP(id, x, ...) DEBUG("[encap][%u]" x, id, ##__VA_ARGS__)
 
 /*
  * Entry point for the encapsulation & decapsulation eBPF
@@ -106,11 +114,15 @@ SEC("deny_all") int deny_all(struct __sk_buff *skb) {
  * http://vger.kernel.org/~davem/skb_data.html
  * @skb the socket buffer struct
  */
-int mpls_decap(struct __sk_buff *skb);
-int mpls_encap(struct __sk_buff *skb);
+int mpls_decap_filter(struct __sk_buff *skb);
+int mpls_encap_filter(struct __sk_buff *skb);
 
-SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
-  bpf_debug_printk("[decap] starting mpls decap.\n");
+SEC("mpls_decap") int mpls_decap_filter(struct __sk_buff *skb) {
+  // Generate a unique request id so we can identify each flow in
+  // the trace logs
+  unsigned long long request_id = REQUEST_ID();
+
+  DEBUG_DECAP(request_id, "starting mpls decap.\n");
 
   /*
    * the redundant casts are needed according to the documentation.
@@ -132,7 +144,7 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * is inside the valid access range for the packet.
    */
   if ((void *)(eth + 1) > data_end) {
-    bpf_debug_printk("[decap] socket buffer struct was malformed.\n");
+    DEBUG_DECAP(request_id, "socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
@@ -143,22 +155,22 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_debug_printk("[decap] ethernet is not wrapping IP packet: 0x%x\n",
-                     bpf_ntohs(eth->h_proto));
+    DEBUG_DECAP(request_id, " ethernet is not wrapping IP packet: 0x%x\n",
+                bpf_ntohs(eth->h_proto));
     return TC_ACT_OK;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
-    bpf_debug_printk("[decap] socket buffer struct was malformed.\n");
+    DEBUG_DECAP(request_id, "socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
-    bpf_debug_printk("[decap] ip header is too long: %d.\n", iph_len);
+    DEBUG_DECAP(request_id, "ip header is too long: %d.\n", iph_len);
     return TC_ACT_SHOT;
   }
 
@@ -167,16 +179,16 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
   struct mpls_hdr *mpls = (struct mpls_hdr *)((void *)(iph) + iph_len);
 
   if ((void *)(mpls + 1) > data_end) {
-    bpf_debug_printk("[decap] socket buffer struct was malformed.\n");
+    DEBUG_DECAP(request_id, "socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
   struct mpls_entry_decoded mpls_decoded = mpls_entry_decode(mpls);
 
-  bpf_debug_printk("[decap] decoded MPLS label: 0x%x\n", mpls_decoded.label);
+  DEBUG_DECAP(request_id, "decoded MPLS label: 0x%x\n", mpls_decoded.label);
 
   if (!is_mpls_entry_bos(mpls)) {
-    bpf_debug_printk("[decap] mpls label not bottom of stack.\n");
+    DEBUG_DECAP(request_id, "mpls label not bottom of stack.\n");
     return TC_ACT_SHOT;
   }
 
@@ -194,16 +206,19 @@ SEC("mpls_decap") int mpls_decap(struct __sk_buff *skb) {
    */
   int ret = bpf_skb_adjust_room(skb, -padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
-    bpf_debug_printk("[decap] error calling skb adjust room.\n");
+    DEBUG_DECAP(request_id, "error calling skb adjust room.\n");
     return TC_ACT_SHOT;
   }
 
-  bpf_debug_printk("[decap] finished mpls decap.\n");
+  DEBUG_DECAP(request_id, "finished mpls decap.\n");
   return TC_ACT_OK;
 }
 
-SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
-  bpf_debug_printk("[encap] starting mpls encap.\n");
+SEC("mpls_encap") int mpls_encap_filter(struct __sk_buff *skb) {
+  // Generate a unique request id so we can identify each flow in
+  // the trace logs
+  unsigned long long request_id = REQUEST_ID();
+  DEBUG_ENCAP(request_id, "starting mpls encap.\n");
 
   /*
    * the redundant casts are needed according to the documentation.
@@ -225,11 +240,11 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * is inside the valid access range for the packet.
    */
   if ((void *)(eth + 1) > data_end) {
-    bpf_debug_printk("[encap] socket buffer struct was malformed.\n");
+    DEBUG_ENCAP(request_id, "socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
-  bpf_debug_printk("[encap] casted to eth header.\n");
+  DEBUG_ENCAP(request_id, "casted to eth header.\n");
 
   /*
    * We only care about IP packet frames. Don't do anything to other ethernet
@@ -238,28 +253,28 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    * pedantic: the protocol is also directly accessible from __sk_buf
    */
   if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    bpf_debug_printk("[encap] ethernet is not wrapping IP packet: 0x%x\n",
-                     bpf_ntohs(eth->h_proto));
+    DEBUG_ENCAP(request_id, "ethernet is not wrapping IP packet: 0x%x\n",
+                bpf_ntohs(eth->h_proto));
     return TC_ACT_OK;
   }
 
   struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
 
   if ((void *)(iph + 1) > data_end) {
-    bpf_debug_printk("[encap] socket buffer struct was malformed.\n");
+    DEBUG_ENCAP(request_id, "socket buffer struct was malformed.\n");
     return TC_ACT_SHOT;
   }
 
-  bpf_debug_printk("[encap] casted to ip header.\n");
+  DEBUG_ENCAP(request_id, "casted to ip header.\n");
 
   // multiply ip header by 4 (bytes) to get the number of bytes of the header.
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
-    bpf_debug_printk("[encap] ip header is too long: %d\n", iph_len);
+    DEBUG_ENCAP(request_id, "ip header is too long: %d\n", iph_len);
     return TC_ACT_SHOT;
   }
 
-  bpf_debug_printk("[encap] calculated ip header length.\n");
+  DEBUG_ENCAP(request_id, "calculated ip header length.\n");
 
   /*
    * This is the amount of padding we need to remove to be just left
@@ -275,12 +290,12 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
    */
   int ret = bpf_skb_adjust_room(skb, padlen, BPF_ADJ_ROOM_NET, 0);
   if (ret) {
-    bpf_debug_printk("[encap] error calling skb adjust room.\n");
+    DEBUG_ENCAP(request_id, "error calling skb adjust room.\n");
     return TC_ACT_SHOT;
   }
 
-  bpf_debug_printk("[encap] about to store bytes of MPLS label: 0x%x\n",
-                   MPLS_STATIC_LABEL);
+  DEBUG_ENCAP(request_id, "about to store bytes of MPLS label: 0x%x\n",
+              MPLS_STATIC_LABEL);
 
   // construct our deterministic mpls header
   struct mpls_hdr mpls = mpls_encode(MPLS_STATIC_LABEL, 123, 0, true);
@@ -289,7 +304,7 @@ SEC("mpls_encap") int mpls_encap(struct __sk_buff *skb) {
   ret = bpf_skb_store_bytes(skb, (int)offset, &mpls, sizeof(struct mpls_hdr),
                             BPF_F_RECOMPUTE_CSUM);
 
-  bpf_debug_printk("[encap] finished mpls encap.\n");
+  DEBUG_ENCAP(request_id, "finished mpls encap.\n");
   return TC_ACT_OK;
 }
 

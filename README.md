@@ -5,7 +5,7 @@
 The goal of this project is to be a good learning resource & skeleton project of how to setup
 a project for writing & building an eBPF filter. Documentation on the subject is scattered largely for eBPF across man-pages, e-mail lists & blog-posts. What's worse is that the date of publication of many of them are quite old now, and don't reflect the best practices as of today.
 
-The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/eBPF-mpls-encap-decap/blob/master/mpls_bpf_kern.c), with the source __heavily__ commented to help new readers understand what is going on.
+The eBPF filter is found in [mpls_bpf_kern.c](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/mpls_bpf_kern.c), with the source __heavily__ commented to help new readers understand what is going on.
 
 ## MPLSinIP
 
@@ -49,72 +49,57 @@ perform different actions based on the label value.
 
 ## Testing
 
-### Setup Virtual Network Interfaces
+A simple file [test.sh](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/test.sh) is included that will:
 
-We will first create a pair of virtual network interfaces that will serve as the encap/decap pair for testing
-purposes. In order to use Linux `tc` with a virtual interface, one of them __must be__ placed within a network namespace.
+1. Create two network namespaces: machine-1 & machine-2
+2. Create a virtual network interface pair; one in each network namespace
+3. Setup the network interfaces to be able to ping each other
+4. Add a qdisc to the network interfaces
+5. Add the compiled bpf filter via tc 
 
-```bash
-ip link add veth0 type veth peer name veth1
-ip netns add test
-ip link set veth0 netns test
-ip link set veth1 up
-ip netns exec test ip link set veth0 up
-ip addr add 10.1.0.2/24 dev veth1
-ip netns exec test ip addr add 10.1.0.1/24 dev veth0
-
-# Add a qdisc to both devices in order to attach bpf filters
-tc qdisc add dev veth1 clsact
-ip netns exec test tc qdisc add dev veth0 clsact
-
-# Verify you can ping!
-ping -I 10.1.0.2 10.1.0.1
-PING 10.1.0.1 (10.1.0.1) from 10.1.0.2 : 56(84) bytes of data.
-64 bytes from 10.1.0.1: icmp_seq=1 ttl=64 time=0.077 ms
-64 bytes from 10.1.0.1: icmp_seq=2 ttl=64 time=0.074 ms
-64 bytes from 10.1.0.1: icmp_seq=3 ttl=64 time=0.073 ms
-```
-
-### Adding eBPF Filters
-
-We've set verbose flag, so you will see the output of the eBPF verifier. The command below uses `ip netns exec` to run `tc` for the device in the network namespace.
+After running the script you should see the output of ping:
 
 ```bash
-ip netns exec test tc filter add dev veth0 ingress bpf da obj mpls.bpf sec mpls_decap verbose
-tc filter add dev veth1 egress bpf da obj mpls.bpf sec mpls_encap verbose
-
-# Verify you can see them !
-ip netns exec test tc filter show dev veth0 ingress
-tc filter show dev veth1 egress
-
-# Verify you can ping!
-ping -I 10.1.0.2 10.1.0.1
-PING 10.1.0.1 (10.1.0.1) from 10.1.0.2 : 56(84) bytes of data.
-64 bytes from 10.1.0.1: icmp_seq=1 ttl=64 time=0.077 ms
-64 bytes from 10.1.0.1: icmp_seq=2 ttl=64 time=0.074 ms
-64 bytes from 10.1.0.1: icmp_seq=3 ttl=64 time=0.073 ms
+Pinging from machine-1 to machine-2
+PING 10.132.204.33 (10.132.204.33) from 10.132.204.25 : 56(84) bytes of data.
+64 bytes from 10.132.204.33: icmp_seq=1 ttl=64 time=0.039 ms
+64 bytes from 10.132.204.33: icmp_seq=2 ttl=64 time=0.089 ms
+64 bytes from 10.132.204.33: icmp_seq=3 ttl=64 time=0.133 ms
+64 bytes from 10.132.204.33: icmp_seq=4 ttl=64 time=0.035 ms
+64 bytes from 10.132.204.33: icmp_seq=5 ttl=64 time=0.089 ms
 ```
 
 ### Verifying & Debugging
 
 In order to verify all is working let's check the debug trace logs!
+(do the following in the host namespace)
 
 ```bash
 # Turn on tracing logs
 echo 1 > /sys/kernel/debug/tracing/tracing_on
 
+# Let's turn on the debug
+sudo ./mpls.bin enable                                          
+Successfully enabled.
+
+# Confirm it's enabled
+sudo ./mpls.bin show  
+debug flag: true
+
 # You can cat the pipe
 cat /sys/kernel/debug/tracing/trace_pipe
 
-# tc also provides a simple way to view it
-tc exec bpf dbg
 
-ping-3964  [001] .... 174556.399525: 0x00000001: [encap] about to store bytes of MPLS label: 0x45
-ping-3964  [001] .... 174556.399526: 0x00000001: [encap] finished mpls encap.
-ping-3964  [001] ..s1 174556.399534: 0x00000001: [decap] starting mpls decap.
-ping-3964  [001] ..s1 174556.399536: 0x00000001: [decap] decoded MPLS label: 45
-ping-3964  [001] ..s1 174556.399537: 0x00000001: [decap] finished mpls decap.
-<idle>-0   [001] ..s. 174559.791288: 0x00000001: [encap] starting mpls encap.
+ping-11635 [000] ..s1 136779.910443: 0: [decap][815794764]finished mpls decap.
+ping-11635 [000] .... 136780.935386: 0: [encap][2508757858]starting mpls encap.
+ping-11635 [000] .... 136780.935404: 0: [encap][2508757858]casted to eth header.
+ping-11635 [000] .... 136780.935406: 0: [encap][2508757858]casted to ip header.
+ping-11635 [000] .... 136780.935408: 0: [encap][2508757858]calculated ip header length.
+ping-11635 [000] .... 136780.935412: 0: [encap][2508757858]about to store bytes of MPLS label: 0x45
+ping-11635 [000] .... 136780.935414: 0: [encap][2508757858]finished mpls encap.
+ping-11635 [000] ..s1 136780.935426: 0: [decap][1560953898]starting mpls decap.
+ping-11635 [000] ..s1 136780.935428: 0: [decap][1560953898]decoded MPLS label: 0x45
+ping-11635 [000] ..s1 136780.935430: 0: [decap][1560953898]finished mpls decap.
 ```
 
 You can list all BPF programs loaded:
@@ -151,6 +136,25 @@ You can use `llvm-objdump` to also see the contents of the eBPF
 llvm-objdump -S -g mpls.bpf
 ```
 
+You should be able to view the BPF_MAP also pinned onto the filesystem:
+
+```bash
+sudo tree /sys/fs/bpf/tc        
+
+/sys/fs/bpf/tc
+└── globals
+    └── DEBUGS_MAP
+
+1 directory, 1 file
+
+
+sudo bpftool map show id 53 -f
+53: array  flags 0x0
+	key 4B  value 1B  max_entries 1  memlock 4096B
+	pinned /sys/fs/bpf/tc/globals/DEBUGS_MAP
+
+```
+
 ### Userland command
 
 A `mpls.bin` command is provided, that allows interacting with the eBPF program loaded.
@@ -166,16 +170,9 @@ debug flag: false
 Successfully enabled.
 ```
 
-> Note: enable & disable only affects the veth in the current namespace which has its own BPF map in `/sys/fs/bpf/ip/globals/DEBUGS_MAP`. Using `ip netns exec test` also did not work, as the _bpf filesystem_ was no longer mounted.
-
 ### Cleanup
 
-You can cleanup the tc filters:
-
-```bash
-ip netns exec test tc filter del dev veth0 ingress
-tc filter del dev veth1 egress
-```
+Running the [test.sh](https://github.com/fzakaria/epbpf-mpls-encap-decap/blob/master/test.sh) script deletes at the start any network namespace prior and starts off fresh.
 
 ## Building
 

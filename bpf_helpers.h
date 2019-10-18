@@ -6,6 +6,11 @@
 
 #define PIN_NONE		    0
 #define PIN_OBJECT_NS		1
+
+/**
+ * This means that tc will pin the map into the BPF pseudo file system as a node.
+ * Due to the PIN_GLOBAL_NS, the map will be placed under /sys/fs/bpf/tc/globals/$MAP
+ */
 #define PIN_GLOBAL_NS		2
 
 /* 
